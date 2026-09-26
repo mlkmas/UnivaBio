@@ -1,0 +1,36 @@
+[project]
+name = "rememberme-ai"
+version = "2.0.0"
+description = "Advanced conversation memory assistant for dementia patients with AI features"
+authors = [
+    {name = "malak"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai (>=2.5.0,<3.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "pyaudio (>=0.2.14,<0.3.0)",
+    "pydantic (>=2.12.3,<3.0.0)",
+    "streamlit (>=1.50.0,<2.0.0)",
+    "pymongo (>=4.15.3,<5.0.0)",
+    "livekit (>=1.0.0,<2.0.0)",
+    "livekit-api (>=1.0.0,<2.0.0)",
+    "requests (>=2.31.0,<3.0.0)",
+    "flask (>=3.0.0,<4.0.0)",
+    "face-recognition (>=1.3.0,<2.0.0)",
+    "numpy (>=1.24.0,<2.0.0)",
+    "pandas (>=2.0.0,<3.0.0)",
+    "pillow (>=10.0.0,<11.0.0)"
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=8.4.2,<9.0.0)",
+    "black (>=25.9.0,<26.0.0)"
+]
