@@ -2,202 +2,194 @@
 
 **Ambient memory support for people living with dementia.**
 
+Submitted to [UnivaBio 2026](https://univabio.devpost.com/) (theme: Artificial Intelligence for Human Health).
+
+---
+
+## The problem
+
 Most memory aids assume the patient will open an app and ask for help. Dementia
-removes exactly that behaviour. As people become aware of their memory loss they
-often withdraw — they stop asking questions to hide the forgetting, and stop
-reporting pain, confusion, and fear. The people who need the most help are the
-least likely to request it, and caregivers frequently learn of a problem only
+takes away exactly that behaviour. As people become aware of their memory loss,
+many withdraw: they stop asking questions to hide the forgetting, and stop
+mentioning pain, confusion or fear. The people who need the most help are the
+least likely to ask for it, and caregivers often find out about a problem only
 after a crisis.
 
-RememberMe AI takes the opposite approach. It listens to the conversations
-already happening in the home and turns them into memory the patient can get
-back, without anyone having to start it.
+More than 55 million people live with dementia worldwide, and most of them are
+cared for at home by family ([WHO](https://www.who.int/news-room/fact-sheets/detail/dementia)).
+
+## The idea
+
+RememberMe AI does not wait to be asked. It listens to the conversations already
+happening in the home and turns them into memory the patient can get back: a
+spoken recap of the day, answers to "who came today?", and medication reminders
+that connect to what the patient actually said. The caregiver gets a clear
+record of each day without having been in the room.
 
 ---
 
-## What it does
+## What works today
 
-**Ambient capture.** Conversations are recorded and transcribed automatically.
-The patient does not open an app, press a button, or ask a question.
+Everything below runs in the Streamlit prototype in this repository.
 
-**One transcript, three summaries.** Each conversation produces a simple
-second-person recap for the patient, a behavioural summary for the caregiver,
-and a structured clinical record capturing mood, cognitive state, topics, and
-key concerns.
-
-**Spoken daily recap.** At a configurable time each evening the system reads the
-day back aloud: who visited, what was said, what happened.
-
-**Context-grounded medication reminders.** Reminders reference what the patient
-actually said. If they mentioned knee pain at breakfast, the afternoon painkiller
-reminder says so.
-
-**Patient assistant.** Answers questions like "who came today?" or "did I take my
-pills?" from that person's own recorded day, in plain language, with emergency
-keyword escalation to the caregiver.
-
-**Visitor identification.** Face recognition against caregiver-enrolled profiles
-answers "who is this person?" in real time.
-
-**Caregiver dashboard.** A calendar and timeline of every conversation, mood
-trends, and a chatbot that can be asked about the patient's recent history.
+| Feature | What it does |
+|---|---|
+| **Conversation capture** | A LiveKit room streams audio; each segment is transcribed with Whisper and stored in MongoDB. |
+| **One transcript, three summaries** | Every conversation produces a short second-person recap for the patient, a behavioural summary for the caregiver, and a structured observation log (participant, topics, mood, key concerns). |
+| **Spoken daily recap** | At a time the caregiver sets, the day is summarised and read aloud with text-to-speech. |
+| **Context-grounded medication reminders** | A background scheduler fires reminders at the prescribed times. If the patient mentioned a matching symptom earlier (for example knee pain), the reminder refers to it. |
+| **Patient assistant** | The patient presses one button and speaks a question. The answer comes from that day's conversations and the caregiver-entered people and medications, and is read back aloud. |
+| **Emergency keywords** | Phrases such as "chest pain" or "fell down" in a patient question show an on-screen emergency message. See *Limitations* below. |
+| **Who is this?** | The patient takes a photo of a visitor; face recognition matches it against people the caregiver has enrolled and shows their name and relationship. |
+| **Caregiver dashboard** | Calendar with a daily mood indicator, a timeline of every conversation with all three summaries, and a chatbot that answers questions about the patient's recent history. |
+| **Admin tools** | Caregivers manage medications, people profiles and photos, recap time, and recording sessions. |
 
 ---
 
-## Design decisions worth knowing
+## Safety by design
 
-**Nothing is inferred.** Every summarisation prompt is constrained to facts
-present in the transcript. The system will not invent a visitor, a symptom, or an
-event. In a care context a plausible-sounding fabrication is worse than no
-answer, because the patient has no way to check it.
+**Nothing is inferred.** Every prompt that produces a summary, recap or reminder
+is restricted to facts stated in the transcript. The system is told never to
+invent a visitor, symptom or event, and the observation log records "Unknown"
+when information is missing. For someone who cannot check an answer against their own memory, a
+plausible fabrication is worse than no answer.
 
-**The patient's speech is not fully trusted.** Confabulation and repetition are
-symptoms, not noise. Anything clinical — medication changes in particular — is
-surfaced to the caregiver for confirmation rather than acted on directly.
+**The patient's words never change the care plan.** Confabulation and
+repetition are symptoms. The system reads medications but never edits them;
+only a caregiver can add or change a medication, in Admin Tools.
 
-**This is a support tool, not a medical device.** It makes no diagnosis and gives
-no treatment recommendations.
+**Support tool, not a medical device.** It makes no diagnosis and gives no
+treatment advice. The observation log is meant to help a caregiver or clinician
+notice patterns, not to replace their judgement.
+
+**Privacy.** Audio is captured only while a recording session is running, and
+recordings are gitignored and kept local. Face profiles are enrolled by the
+caregiver, not collected automatically. A real deployment would need consent
+from the patient (or their legal representative) and from regular visitors;
+see *What's next*.
 
 ---
 
 ## Architecture
 
 ```
-Ambient conversation
+Conversation in the home (LiveKit room)
         ↓
-   Transcription
+Transcription (Whisper)
         ↓
-Tri-view summarisation   →   patient / caregiver / clinical
+Three-view summarisation (GPT-4)  →  patient / caregiver / observation log
         ↓
-   Care record (MongoDB)
+Care record (MongoDB)
         ↓
-Recap · Reminder · Alert · Visitor ID
+Daily recap · Medication reminder · Patient Q&A · Visitor ID
+        ↓
+Speech output (OpenAI TTS)
 ```
 
 | Layer | Technology |
 |---|---|
 | App | Streamlit (multipage) |
-| Data | MongoDB |
-| Real-time audio | LiveKit |
-| Transcription | Whisper (or Gemini — see below) |
-| Language model | GPT-4 (or Gemini — see below) |
-| Speech | OpenAI TTS (or gTTS / edge-tts) |
-| Vision | `face_recognition` |
-| Validation | Pydantic |
+| Data | MongoDB Atlas, Pydantic models |
+| Real-time audio | LiveKit, Flask token server |
+| Transcription | OpenAI Whisper |
+| Language models | GPT-4 (summaries, patient Q&A), GPT-3.5 Turbo (recap, reminders, caregiver chatbot) |
+| Speech | OpenAI TTS |
+| Vision | `face_recognition` (dlib) |
 
 ### Project layout
 
 ```
-app.py                      entry point
+app.py                       Streamlit entry point
 pages/
-  1_Caregiver_Dashboard.py  timeline, mood trends, history chatbot
-  2_Patient_View.py         voice-first patient interface
-  3_Admin_Tools.py          settings, medications, people
-  4_Who_Is_This.py          visitor identification
+  1_Caregiver_Dashboard.py   calendar, timeline, mood, history chatbot
+  2_Patient_View.py          recap, reminders, voice assistant
+  3_Admin_Tools.py           medications, people, settings, recording
+  4_Who_Is_This.py           visitor identification
 src/
-  database.py               MongoDB access layer
-  schemas.py                Pydantic models
-  transcriber.py            speech to text
-  summarizer.py             tri-view summarisation
-  recap_generator.py        daily spoken recap
-  smart_reminder.py         context-grounded medication reminders
-  patient_assistant.py      patient-facing Q&A
-  caregiver_chatbot.py      caregiver-facing Q&A over history
-  text_to_speech.py         spoken output
-  livekit_client.py         real-time audio session
-  background_scheduler.py   recap and reminder scheduling
+  livekit_client.py          joins the room, captures and processes audio
+  token_server.py            issues LiveKit access tokens
+  transcriber.py             speech to text
+  summarizer.py              three-view summarisation
+  recap_generator.py         daily recap
+  smart_reminder.py          context-grounded medication reminders
+  patient_assistant.py       patient Q&A and emergency keywords
+  caregiver_chatbot.py       caregiver Q&A over history
+  background_scheduler.py    fires reminders and the daily recap
+  text_to_speech.py          spoken output
+  database.py                MongoDB access layer
+  schemas.py                 Pydantic models
+populate_mock_data.py        fills the database with a month of sample history
 ```
 
 ---
 
-## Setup
+## Running it
 
-Requires Python 3.11+.
-
-```bash
-git clone https://github.com/mlkmas/rememberMe.git
-cd rememberMe
-poetry install          # or: pip install -r requirements.txt
-```
-
-`face-recognition` needs `dlib`, which needs CMake and a C++ compiler. On
-Windows, install Visual Studio Build Tools first. Everything except visitor
-identification works without it.
-
-Copy `.env.example` to `.env` and fill it in:
-
-```
-MONGO_CONNECTION_STRING=mongodb+srv://user:password@cluster.mongodb.net/
-OPENAI_API_KEY=sk-...
-LIVEKIT_URL=wss://your-project.livekit.cloud
-LIVEKIT_API_KEY=...
-LIVEKIT_API_SECRET=...
-```
-
-Verify the connection, then run:
+Requires Python 3.11+, a MongoDB Atlas cluster, an OpenAI API key, and (for
+live capture) a free LiveKit Cloud project.
 
 ```bash
-python verify_setup.py
+git clone https://github.com/mlkmas/UnivaBio.git
+cd UnivaBio
+poetry install
+poetry run pip install faker        # only needed for sample data
+```
+
+`face-recognition` depends on `dlib`, which needs CMake and a C++ compiler (on
+Windows, install Visual Studio Build Tools first). Every page except *Who Is
+This?* works without it.
+
+Copy `.env.example` to `.env` and fill in `MONGO_CONNECTION_STRING`,
+`OPENAI_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`.
+
+```bash
+python populate_mock_data.py        # optional: a month of sample history, no API calls
 streamlit run app.py
 ```
 
-### Demo data
-
-To populate the database with people, medications, and a month of conversation
-history without calling any AI API:
+For live capture, reminders and the automatic recap, run these alongside the
+app, each in its own terminal:
 
 ```bash
-python seed_demo.py --reset
+python src/token_server.py          # LiveKit tokens on port 5000
+python src/livekit_client.py        # listens in the room and processes audio
+python src/background_scheduler.py  # medication reminders and daily recap
 ```
 
 ---
 
-## Running on Gemini instead of OpenAI
+## Limitations
 
-The project can run on Gemini's free tier with no code changes beyond one import
-line per module. Drop `src/openai_compat.py` in place, then:
+Stated plainly, because they matter in a care setting:
 
-```bash
-pip install google-genai gtts
-python switch_to_gemini.py
-python -m src.openai_compat     # connection check
-```
+- **Emergency alerts stay on screen.** The patient sees an emergency message,
+  but no notification is sent to the caregiver yet. Keyword matching is also
+  simple and can produce false positives.
+- **Speaker identity comes from the LiveKit participant name** ("patient" or
+  "caregiver"), not from voice recognition.
+- **English only** in the current prompts.
+- **Not tested with patients or caregivers.** All sample data is synthetic.
 
-GPT-4 maps to Gemini Flash, Whisper to Gemini's native audio input, and OpenAI
-TTS to gTTS. Add `GEMINI_API_KEY` to `.env`. Reverse it with
-`python switch_to_gemini.py --undo`.
+## What's next
 
----
-
-## Status
-
-Working prototype. The Streamlit build in this repository runs end to end. A
-FastAPI + React rewrite is in progress at
-[rememberme-product](https://github.com/mlkmas/rememberme-product) and is not yet
-stable.
-
-### Roadmap
-
-- Agent layer with tiered autonomy — routine actions execute automatically,
-  clinical actions require caregiver confirmation
-- Longitudinal participation tracking, so declining speech surfaces as a trend
-  rather than an absence
-- Multilingual support (the pipeline is language-agnostic; over 60% of people
-  living with dementia are in low- and middle-income countries)
+- Caregiver notifications for emergencies (dashboard alert first, then SMS or push)
+- Participation tracking over time, so a decline in how much the patient speaks
+  shows up as a trend rather than a feeling
+- A consent flow for the patient, their representative and regular visitors,
+  with automatic deletion of raw audio after transcription
+- Multilingual support, starting with Arabic and Hebrew
+- A FastAPI and React rebuild with a voice-first patient interface
 - Testing with real caregivers
 
 ---
 
-## Built for
-
-[Hack2Heal 2.0 — Global Healthcare Innovation Hackathon](https://hack2heal-2-0.devpost.com/)
 
 ## References
 
-- World Health Organization, [Dementia fact sheet](https://www.who.int/news-room/fact-sheets/detail/dementia)
+- World Health Organization. [Dementia fact sheet](https://www.who.int/news-room/fact-sheets/detail/dementia).
 - Livingston G, et al. Dementia prevention, intervention, and care: 2024 report of the *Lancet* standing Commission. *The Lancet* 2024; 404(10452): 572–628.
 - Woods B, et al. Reminiscence therapy for dementia. *Cochrane Database of Systematic Reviews* 2018, Issue 3, CD001120.
 
 ## Author
 
-Malak Masarwe — [github.com/mlkmas](https://github.com/mlkmas)
+Malak Masarwe · [github.com/mlkmas](https://github.com/mlkmas)
